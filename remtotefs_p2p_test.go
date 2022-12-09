@@ -159,10 +159,10 @@ func (s *remoteFSWithP2P) SetupTest() {
 	c1 := newDCWithFlowControl("server", dc1, rawDC1, 1*1024*1024)
 	c2 := newDCWithFlowControl("client", dc2, rawDC2, 1*1024*1024)
 
-	server, err := New("server", c1, c1, maxPacketSize)
+	server, err := New("server", s.fs, c1, c1, maxPacketSize)
 	require.Nil(err)
 
-	client, err := New("client", c2, c2, maxPacketSize)
+	client, err := New("client", s.fs, c2, c2, maxPacketSize)
 	require.Nil(err)
 
 	s.server = &remoteFSWithNetwork{

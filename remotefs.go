@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -34,7 +35,7 @@ func createNewRequest(reqType FileSystemOperation, data interface{}) (*Request, 
 }
 
 type File struct {
-	*os.File
+	FileInterface
 	sync.Mutex
 }
 
@@ -52,6 +53,7 @@ type PartialMessage struct {
 
 type RemoteFS struct {
 	Name              string
+	fs                afero.Fs
 	maxPacketSize     int
 	mutex             sync.Mutex
 	fdMap             map[IDType]*File
@@ -64,7 +66,7 @@ type RemoteFS struct {
 	stopped           bool
 }
 
-func New(name string, writer io.Writer, reader io.Reader, maxPacketSize int) (*RemoteFS, error) {
+func New(name string, fs afero.Fs, writer io.Writer, reader io.Reader, maxPacketSize int) (*RemoteFS, error) {
 	if maxPacketSize != 0 && maxPacketSize < HeaderSize {
 		return nil, fmt.Errorf("maxPacketSize (%v) must be %v", maxPacketSize, HeaderSize)
 	}
@@ -76,6 +78,7 @@ func New(name string, writer io.Writer, reader io.Reader, maxPacketSize int) (*R
 
 	ret := &RemoteFS{
 		Name:              name,
+		fs:                fs,
 		mutex:             sync.Mutex{},
 		maxPacketSize:     maxPacketSize,
 		fdMap:             make(map[IDType]*File),
@@ -318,7 +321,7 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 			if err != nil {
 				return err
 			}
-			file, err := os.OpenFile(req.Path, req.Flags, req.Perm)
+			file, err := r.fs.OpenFile(req.Path, req.Flags, req.Perm)
 			if err != nil {
 				return r.sendResponse(rawReq, nil, err)
 			}
@@ -328,8 +331,8 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 				r.mutex.Lock()
 				defer r.mutex.Unlock()
 				r.fdMap[fd] = &File{
-					File:  file,
-					Mutex: sync.Mutex{},
+					FileInterface: file,
+					Mutex:         sync.Mutex{},
 				}
 				openRes = &OpenResponse{
 					FD: fd,
@@ -448,9 +451,9 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 				return err
 			}
 			if req.Recursive {
-				err = os.MkdirAll(req.Path, req.Perm)
+				err = r.fs.MkdirAll(req.Path, req.Perm)
 			} else {
-				err = os.Mkdir(req.Path, req.Perm)
+				err = r.fs.Mkdir(req.Path, req.Perm)
 			}
 			return r.sendResponse(rawReq, nil, err)
 		}
@@ -462,11 +465,110 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 				return err
 			}
 			if req.Recursive {
-				err = os.RemoveAll(req.Path)
+				err = r.fs.RemoveAll(req.Path)
 			} else {
-				err = os.Remove(req.Path)
+				err = r.fs.Remove(req.Path)
 			}
 			return r.sendResponse(rawReq, nil, err)
+		}
+	case ChmodOp:
+		{
+			var req ChmodRequest
+			err := msgpack.Unmarshal(rawReq.Data, &req)
+			if err != nil {
+				return err
+			}
+			func() {
+				r.mutex.Lock()
+				defer r.mutex.Unlock()
+				if f, ok := r.fdMap[req.FD]; !ok {
+					err = fmt.Errorf("bad fd")
+					return
+				} else {
+					f.Lock()
+					defer f.Unlock()
+					err = r.fs.Chmod(f.Name(), req.Mode)
+				}
+			}()
+			return r.sendResponse(rawReq, nil, err)
+		}
+	case ChownOp:
+		{
+			var req ChownRequest
+			err := msgpack.Unmarshal(rawReq.Data, &req)
+			if err != nil {
+				return err
+			}
+			func() {
+				r.mutex.Lock()
+				defer r.mutex.Unlock()
+				if f, ok := r.fdMap[req.FD]; !ok {
+					err = fmt.Errorf("bad fd")
+					return
+				} else {
+					f.Lock()
+					defer f.Unlock()
+					err = r.fs.Chown(f.Name(), req.UID, req.GID)
+				}
+			}()
+			return r.sendResponse(rawReq, nil, err)
+		}
+
+	case StatOp:
+		{
+			var req StatRequest
+			err := msgpack.Unmarshal(rawReq.Data, &req)
+			if err != nil {
+				return err
+			}
+			var statRes StatResponse
+			func() {
+				r.mutex.Lock()
+				defer r.mutex.Unlock()
+				if f, ok := r.fdMap[req.FD]; !ok {
+					err = fmt.Errorf("bad fd")
+					return
+				} else {
+					f.Lock()
+					defer f.Unlock()
+					var fileInfo os.FileInfo
+					fileInfo, err = f.Stat()
+					if err != nil {
+						return
+					}
+					statRes.FileInfo = createFileInfo(fileInfo)
+				}
+			}()
+			return r.sendResponse(rawReq, statRes, err)
+		}
+	case ReadDirOp:
+		{
+			var req ReadDirRequest
+			err := msgpack.Unmarshal(rawReq.Data, &req)
+			if err != nil {
+				return err
+			}
+			var readDirRes ReadDirResponse
+			func() {
+				var f afero.File
+				f, err = r.fs.Open(req.Path)
+				if err != nil {
+					return
+				}
+				defer f.Close()
+				var children []os.FileInfo
+				children, err = f.Readdir(-1) // TODO: We should probably do some streaming here
+				if err != nil {
+					return
+				}
+
+				readDirRes.Children = make([]*FileInfo, len(children))
+				for idx, child := range children {
+
+					readDirRes.Children[idx] = createFileInfo(child)
+				}
+			}()
+			return r.sendResponse(rawReq, readDirRes, err)
 		}
 	}
 	return nil
@@ -518,6 +620,14 @@ func (r *RemoteFS) handleIncomingResponse(rawRes *Response) error {
 	case SeekOp:
 		{
 			res = &SeekResponse{}
+		}
+	case StatOp:
+		{
+			res = &StatResponse{}
+		}
+	case ReadDirOp:
+		{
+			res = &ReadDirResponse{}
 		}
 	}
 	if res != nil {
@@ -595,4 +705,31 @@ func (r *RemoteFS) remove(name string, recursive bool) error {
 		return res.Error
 	}
 	return nil
+}
+
+func (r *RemoteFS) ReadDir(path string, count int) ([]os.FileInfo, error) {
+	readDirReq := &ReadDirRequest{
+		Path:  path,
+		Count: count,
+	}
+
+	req, err := createNewRequest(ReadDirOp, readDirReq)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := r.SendRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	readDirRes := res.Data.(*ReadDirResponse)
+	fileInfos := make([]os.FileInfo, len(readDirRes.Children))
+	for idx, entry := range readDirRes.Children {
+		fileInfos[idx] = entry
+	}
+	return fileInfos, nil
 }

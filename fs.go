@@ -2,6 +2,7 @@ package remotefs
 
 import (
 	"os"
+	"time"
 )
 
 type FileSystem interface {
@@ -22,6 +23,9 @@ const (
 	MkdirOp
 	RmdirOp
 	ReadDirOp
+	ChmodOp
+	ChownOp
+	StatOp
 )
 
 func FileSystemOperationToString(op FileSystemOperation) string {
@@ -44,6 +48,12 @@ func FileSystemOperationToString(op FileSystemOperation) string {
 		return "rmdir"
 	case ReadDirOp:
 		return "readdir"
+	case ChmodOp:
+		return "chmod"
+	case ChownOp:
+		return "chown"
+	case StatOp:
+		return "stat"
 	default:
 		return "unknown"
 	}
@@ -154,5 +164,74 @@ type RmdirRequest struct {
 }
 
 type ReadDirRequest struct {
-	Path string `json:"path" msgpack:"path"`
+	Path  string `json:"path" msgpack:"path"`
+	Count int    `json:"count" msgpack:"count"`
+}
+
+type ReadDirResponse struct {
+	Children []*FileInfo
+}
+
+type ChmodRequest struct {
+	FD   IDType
+	Mode os.FileMode
+}
+
+type ChownRequest struct {
+	FD  IDType
+	UID int
+	GID int
+}
+
+type StatRequest struct {
+	FD IDType
+}
+
+type FileInfo struct {
+	FName    string
+	FSize    int64
+	FMode    os.FileMode
+	FModTime time.Time
+	FIsDir   bool
+	FSys     any
+}
+
+func (f *FileInfo) Name() string {
+	return f.FName
+}
+
+func (f *FileInfo) Size() int64 {
+	return f.FSize
+}
+
+func (f *FileInfo) Mode() os.FileMode {
+	return f.FMode
+}
+
+func (f *FileInfo) ModTime() time.Time {
+	return f.FModTime
+}
+
+func (f *FileInfo) IsDir() bool {
+	return f.FIsDir
+}
+
+func (f *FileInfo) Sys() any {
+	return f.FSys
+}
+
+func createFileInfo(fileInfo os.FileInfo) *FileInfo {
+	ret := &FileInfo{
+		FName:    fileInfo.Name(),
+		FSize:    fileInfo.Size(),
+		FMode:    fileInfo.Mode(),
+		FModTime: fileInfo.ModTime(),
+		FIsDir:   fileInfo.IsDir(),
+		FSys:     nil, // TODO: Do we need this?
+	}
+	return ret
+}
+
+type StatResponse struct {
+	*FileInfo
 }
