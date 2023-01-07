@@ -51,12 +51,13 @@ func (dc *DCWithFlowControl) Read(b []byte) (int, error) {
 }
 
 func (dc *DCWithFlowControl) Write(b []byte) (int, error) {
-	if dc.dc.BufferedAmount()+uint64(len(b)) > dc.maxBufferedAmount {
+	n, err := dc.raw.Write(b)
+	if dc.dc.BufferedAmount() > dc.maxBufferedAmount {
 		log.Debugf("[%v]: Waiting for drain", dc.name)
 		<-dc.ch
 		log.Debugf("[%v]: Finished waiting for drain", dc.name)
 	}
-	return dc.raw.Write(b)
+	return n, err
 }
 
 func (s *remoteFSWithP2P) SetupTest() {
@@ -159,10 +160,10 @@ func (s *remoteFSWithP2P) SetupTest() {
 	c1 := newDCWithFlowControl("server", dc1, rawDC1, 1*1024*1024)
 	c2 := newDCWithFlowControl("client", dc2, rawDC2, 1*1024*1024)
 
-	server, err := New("server", s.fs, c1, c1, maxPacketSize)
+	server, err := New("server", s.fs, createSendChan(s.T(), c1, "server"), createReceiveChan(s.T(), c1, "server"), maxPacketSize)
 	require.Nil(err)
 
-	client, err := New("client", s.fs, c2, c2, maxPacketSize)
+	client, err := New("client", s.fs, createSendChan(s.T(), c2, "client"), createReceiveChan(s.T(), c2, "client"), maxPacketSize)
 	require.Nil(err)
 
 	s.server = &remoteFSWithNetwork{
@@ -187,6 +188,6 @@ func (s *remoteFSWithP2P) SetupTest() {
 }
 
 func TestRemoteFSWithP2P(t *testing.T) {
-	// log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 	suite.Run(t, new(remoteFSWithP2P))
 }

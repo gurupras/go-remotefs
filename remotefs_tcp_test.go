@@ -35,7 +35,7 @@ func (s *remoteFSWithTCP) SetupTest() {
 
 	packetSize := 1024
 
-	server, err := New("server", s.fs, c1, c1, packetSize)
+	server, err := New("server", s.fs, createSendChan(s.T(), c1, "server"), createReceiveChan(s.T(), c1, "server"), packetSize)
 	if err != nil {
 		log.Fatalf("Failed to create remoteFS: %v", err)
 	}
@@ -45,7 +45,7 @@ func (s *remoteFSWithTCP) SetupTest() {
 		Conn:     c1,
 	}
 
-	client, err := New("client", s.fs, c2, c2, packetSize)
+	client, err := New("client", s.fs, createSendChan(s.T(), c2, "client"), createReceiveChan(s.T(), c2, "client"), packetSize)
 	if err != nil {
 		log.Fatalf("Failed to create remoteFS: %v", err)
 	}

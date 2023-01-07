@@ -61,20 +61,17 @@ type RemoteFS struct {
 	responseBufferMap map[IDType][]byte
 	partialMessages   map[IDType]*PartialMessage
 	incomingMessages  chan *Message
-	encoder           *msgpack.Encoder
-	decoder           *msgpack.Decoder
 	stopped           bool
+	sendChan          chan<- []byte
+	receiveChan       <-chan []byte
 }
 
-func New(name string, fs afero.Fs, writer io.Writer, reader io.Reader, maxPacketSize int) (*RemoteFS, error) {
+func New(name string, fs afero.Fs, sendChan chan<- []byte, receiveChan <-chan []byte, maxPacketSize int) (*RemoteFS, error) {
 	if maxPacketSize != 0 && maxPacketSize < HeaderSize {
 		return nil, fmt.Errorf("maxPacketSize (%v) must be %v", maxPacketSize, HeaderSize)
 	}
 
 	responseMap := make(map[IDType]chan *ParsedResponse)
-
-	encoder := msgpack.NewEncoder(writer)
-	decoder := msgpack.NewDecoder(reader)
 
 	ret := &RemoteFS{
 		Name:              name,
@@ -86,8 +83,8 @@ func New(name string, fs afero.Fs, writer io.Writer, reader io.Reader, maxPacket
 		responseMap:       responseMap,
 		partialMessages:   make(map[IDType]*PartialMessage),
 		incomingMessages:  make(chan *Message),
-		encoder:           encoder,
-		decoder:           decoder,
+		sendChan:          sendChan,
+		receiveChan:       receiveChan,
 	}
 	go func() {
 		err := ret.handleIncomingFragments()
@@ -108,6 +105,7 @@ func New(name string, fs afero.Fs, writer io.Writer, reader io.Reader, maxPacket
 func (r *RemoteFS) Close() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+	defer close(r.sendChan)
 	r.stopped = true
 }
 
@@ -191,11 +189,11 @@ func (r *RemoteFS) handleIncomingFragments() error {
 		defer r.mutex.Unlock()
 		return r.stopped
 	}
-	for {
+	for b := range r.receiveChan {
 		if isStopped() {
 			break
 		}
-		err := r.decodeFragment()
+		err := r.decodeFragment(b)
 		if err != nil {
 			stopped := isStopped()
 			log.Debugf("[%v]: Encountered error and stopped=%v", r.Name, stopped)
@@ -208,9 +206,9 @@ func (r *RemoteFS) handleIncomingFragments() error {
 	return nil
 }
 
-func (r *RemoteFS) decodeFragment() error {
+func (r *RemoteFS) decodeFragment(b []byte) error {
 	var frag Fragment
-	err := r.decoder.Decode(&frag)
+	err := msgpack.Unmarshal(b, &frag)
 	if err != nil {
 		return err
 	}
@@ -261,7 +259,7 @@ func (r *RemoteFS) decodeFragment() error {
 }
 
 func (r *RemoteFS) encodeFragment(id IDType, op OpType, data interface{}) error {
-	b, err := msgpack.Marshal(data)
+	dataBytes, err := msgpack.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -270,17 +268,18 @@ func (r *RemoteFS) encodeFragment(id IDType, op OpType, data interface{}) error 
 
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if r.maxPacketSize == 0 || len(b) < maxDataSize {
+	if r.maxPacketSize == 0 || len(dataBytes) < maxDataSize-64 { // FIXME: We need to account for fragment size
 		frag := Fragment{
 			ID:     id,
 			OpType: op,
-			Data:   b,
+			Data:   dataBytes,
 			End:    true,
 		}
-		err = r.encoder.Encode(&frag)
+		fragBytes, err := msgpack.Marshal(frag)
 		if err != nil {
 			return err
 		}
+		r.sendChan <- fragBytes
 		log.Debugf("[%v]: Encoded fragment id=%v size=%v end=%v type=%v", r.Name, frag.ID, len(frag.Data), frag.End, frag.OpType)
 	} else {
 		sent := 0
@@ -288,8 +287,8 @@ func (r *RemoteFS) encodeFragment(id IDType, op OpType, data interface{}) error 
 			var frag Fragment
 			frag.ID = id
 
-			remaining := len(b) - sent
-			chunkSize := maxDataSize
+			remaining := len(dataBytes) - sent
+			chunkSize := maxDataSize - 64
 			if remaining < chunkSize {
 				chunkSize = remaining
 				frag.OpType = op
@@ -297,14 +296,15 @@ func (r *RemoteFS) encodeFragment(id IDType, op OpType, data interface{}) error 
 			} else {
 				frag.End = false
 			}
-			frag.Data = b[sent : sent+chunkSize]
-			err = r.encoder.Encode(&frag)
+			frag.Data = dataBytes[sent : sent+chunkSize]
+			fragBytes, err := msgpack.Marshal(frag)
 			if err != nil {
 				return err
 			}
+			r.sendChan <- fragBytes
 			log.Debugf("[%v]: Encoded fragment id=%v size=%v end=%v type=%v", r.Name, frag.ID, len(frag.Data), frag.End, frag.OpType)
 			sent += chunkSize
-			if sent == len(b) {
+			if sent == len(dataBytes) {
 				break
 			}
 		}

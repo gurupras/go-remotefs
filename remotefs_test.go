@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type remoteFSWithNetwork struct {
@@ -47,6 +49,47 @@ func (m *MockFS) Chown(path string, uid int, gid int) error {
 type MockFile struct {
 	mock.Mock
 	afero.File
+}
+
+type packetWrapper struct {
+	Data []byte
+}
+
+func createSendChan(t *testing.T, writer io.Writer, name string) chan<- []byte {
+	require := require.New(t)
+	encoder := msgpack.NewEncoder(writer)
+	ch := make(chan []byte)
+	go func() {
+		for b := range ch {
+			pkt := &packetWrapper{b}
+			if len(b) > 65535 {
+				log.Warnf("[%v]: Attemping to send large packet", name)
+			}
+			err := encoder.Encode(pkt)
+			require.Nil(err)
+		}
+	}()
+	return ch
+}
+
+func createReceiveChan(t *testing.T, reader io.Reader, name string) <-chan []byte {
+	require := require.New(t)
+	_ = require
+	decoder := msgpack.NewDecoder(reader)
+	ch := make(chan []byte)
+	go func() {
+		defer close(ch)
+		for {
+			var pkt packetWrapper
+			err := decoder.Decode(&pkt)
+			if err != nil {
+				log.Debugf("[%v]: Failed to decode packet: %v", name, err)
+				break
+			}
+			ch <- pkt.Data
+		}
+	}()
+	return ch
 }
 
 func (m *MockFile) Stat() (os.FileInfo, error) {
