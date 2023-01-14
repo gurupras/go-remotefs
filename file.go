@@ -58,11 +58,11 @@ func (r *RemoteFS) OpenFile(path string, flags int, perm fs.FileMode) (*RemoteFi
 }
 
 func (f *RemoteFile) Close() error {
-	closeReq := &CloseRequest{
+	closeReq := CloseRequest{
 		FD: f.FD,
 	}
 
-	res, err := f.sendRequest(CloseOp, closeReq)
+	res, err := f.sendRequest(CloseOp, &closeReq)
 	if err != nil {
 		return err
 	}
@@ -73,12 +73,12 @@ func (f *RemoteFile) Close() error {
 }
 
 func (f *RemoteFile) Read(b []byte) (int, error) {
-	readReq := &ReadRequest{
+	readReq := ReadRequest{
 		FD:     f.FD,
 		Length: len(b),
 	}
 	log.Debugf("Making read request of length: %v", len(b))
-	res, err := f.sendRequest(ReadOp, readReq, b)
+	res, err := f.sendRequest(ReadOp, &readReq, b)
 	if err != nil {
 		return 0, err
 	}
@@ -90,7 +90,7 @@ func (f *RemoteFile) Read(b []byte) (int, error) {
 }
 
 func (f *RemoteFile) Write(b []byte) (int, error) {
-	writeReq := &WriteRequest{
+	writeReq := WriteRequest{
 		FD:    f.FD,
 		Bytes: b,
 	}
@@ -106,13 +106,13 @@ func (f *RemoteFile) Write(b []byte) (int, error) {
 }
 
 func (f *RemoteFile) Seek(offset int64, whence int) (int64, error) {
-	seekReq := &SeekRequest{
+	seekReq := SeekRequest{
 		FD:     f.FD,
 		Offset: offset,
 		Whence: whence,
 	}
 
-	res, err := f.sendRequest(SeekOp, seekReq)
+	res, err := f.sendRequest(SeekOp, &seekReq)
 	if err != nil {
 		return 0, err
 	}
@@ -125,11 +125,11 @@ func (f *RemoteFile) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (f *RemoteFile) Chmod(mode os.FileMode) error {
-	chmodReq := &ChmodRequest{
+	chmodReq := ChmodRequest{
 		FD:   f.FD,
 		Mode: mode,
 	}
-	res, err := f.sendRequest(ChmodOp, chmodReq)
+	res, err := f.sendRequest(ChmodOp, &chmodReq)
 	if err != nil {
 		return err
 	}
@@ -140,12 +140,12 @@ func (f *RemoteFile) Chmod(mode os.FileMode) error {
 }
 
 func (f *RemoteFile) Chown(uid int, gid int) error {
-	chownReq := &ChownRequest{
+	chownReq := ChownRequest{
 		FD:  f.FD,
 		UID: uid,
 		GID: gid,
 	}
-	res, err := f.sendRequest(ChownOp, chownReq)
+	res, err := f.sendRequest(ChownOp, &chownReq)
 	if err != nil {
 		return err
 	}
@@ -156,10 +156,10 @@ func (f *RemoteFile) Chown(uid int, gid int) error {
 }
 
 func (f *RemoteFile) Stat() (os.FileInfo, error) {
-	statReq := &StatRequest{
+	statReq := StatRequest{
 		FD: f.FD,
 	}
-	res, err := f.sendRequest(StatOp, statReq)
+	res, err := f.sendRequest(StatOp, &statReq)
 	if err != nil {
 		return nil, err
 	}
