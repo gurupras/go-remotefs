@@ -245,6 +245,11 @@ func (r *RemoteFS) decodeFragment(b []byte) error {
 			}
 		}
 		decoder := msgpack.NewDecoder(partial.data)
+		func() {
+			r.mutex.Lock()
+			defer r.mutex.Unlock()
+			delete(r.partialMessages, frag.ID)
+		}()
 		err := decoder.Decode(data)
 		if err != nil {
 			return err
