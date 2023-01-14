@@ -54,6 +54,7 @@ func (r *RemoteFS) OpenFile(path string, flags int, perm fs.FileMode) (*RemoteFi
 	openRes := res.Data.(*OpenResponse)
 	return &RemoteFile{
 		FD: openRes.FD,
+		fs: r,
 	}, nil
 }
 
