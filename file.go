@@ -20,6 +20,17 @@ type FileInterface interface {
 	Stat() (os.FileInfo, error)
 }
 
+var openFlagsMap = map[string]int{
+	"O_RDONLY": os.O_RDONLY,
+	"O_WRONLY": os.O_WRONLY,
+	"O_RDWR":   os.O_RDWR,
+	"O_APPEND": os.O_APPEND,
+	"O_CREATE": os.O_CREATE,
+	"O_EXCL":   os.O_EXCL,
+	"O_SYNC":   os.O_SYNC,
+	"O_TRUNC":  os.O_TRUNC,
+}
+
 func (f *RemoteFile) sendRequest(op FileSystemOperation, data interface{}, responseBufs ...[]byte) (*ParsedResponse, error) {
 	req, err := createNewRequest(op, data)
 	if err != nil {
@@ -33,9 +44,24 @@ func (f *RemoteFile) sendRequest(op FileSystemOperation, data interface{}, respo
 }
 
 func (r *RemoteFS) OpenFile(path string, flags int, perm fs.FileMode) (*RemoteFile, error) {
+
+	flags64 := uint64(flags)
+	flagsArray := make([]string, 0)
+	for label, bitValue := range openFlagsMap {
+		if flags&bitValue > 0 {
+			flagsArray = append(flagsArray, label)
+		}
+	}
+	// Finally, check for RD_ONLY which has a value of 0
+	if (flags64 << 62) > 0 {
+		// We're in RDWR or WR_ONLY. Nothing to do
+	} else {
+		flagsArray = append(flagsArray, "O_RDONLY")
+	}
+
 	openReq := OpenRequest{
 		Path:  path,
-		Flags: flags,
+		Flags: flagsArray,
 		Perm:  perm,
 	}
 	req, err := createNewRequest(OpenOp, &openReq)

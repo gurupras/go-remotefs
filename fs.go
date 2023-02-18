@@ -101,7 +101,7 @@ type Request struct {
 
 type OpenRequest struct {
 	Path  string      `json:"path" msgpack:"path"`
-	Flags int         `json:"flags" msgpack:"flags"`
+	Flags []string    `json:"flags" msgpack:"flags"`
 	Perm  os.FileMode `json:"perm" msgpack:"perm"`
 }
 

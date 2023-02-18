@@ -326,7 +326,8 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 			if err != nil {
 				return err
 			}
-			file, err := r.fs.OpenFile(req.Path, req.Flags, req.Perm)
+			flags := convertOpenRequestFlagsToInt(req.Flags)
+			file, err := r.fs.OpenFile(req.Path, flags, req.Perm)
 			if err != nil {
 				return r.sendResponse(rawReq, nil, err)
 			}
