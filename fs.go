@@ -101,7 +101,7 @@ type Request struct {
 
 type OpenRequest struct {
 	Path  string      `json:"path" msgpack:"path"`
-	Flags uint32      `json:"flags" msgpack:"flags"`
+	Flags int         `json:"flags" msgpack:"flags"`
 	Perm  os.FileMode `json:"perm" msgpack:"perm"`
 }
 
@@ -115,7 +115,7 @@ type OpenResponse struct {
 
 type ReadRequest struct {
 	FD     IDType `json:"fd" msgpack:"fd"`
-	Length uint32 `json:"length" msgpack:"length"`
+	Length int    `json:"length" msgpack:"length"`
 }
 
 type ReadAtRequest struct {
@@ -124,7 +124,7 @@ type ReadAtRequest struct {
 }
 
 type ReadResponse struct {
-	Length uint32 `json:"length" msgpack:"length"`
+	Length int    `json:"length" msgpack:"length"`
 	Bytes  []byte `json:"bytes" msgpack:"bytes"`
 }
 
@@ -135,7 +135,7 @@ type WriteRequest struct {
 }
 
 type WriteResponse struct {
-	Length uint32 `json:"length" msgpack:"length"`
+	Length int `json:"length" msgpack:"length"`
 }
 
 type CloseRequest struct {
@@ -145,7 +145,7 @@ type CloseRequest struct {
 type SeekRequest struct {
 	FD     IDType `json:"fd" msgpack:"fd"`
 	Offset int64  `json:"offset" msgpack:"offset"`
-	Whence uint32 `json:"whence" msgpack:"whence"`
+	Whence int    `json:"whence" msgpack:"whence"`
 }
 
 type SeekResponse struct {

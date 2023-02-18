@@ -326,7 +326,7 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 			if err != nil {
 				return err
 			}
-			file, err := r.fs.OpenFile(req.Path, int(req.Flags), req.Perm)
+			file, err := r.fs.OpenFile(req.Path, req.Flags, req.Perm)
 			if err != nil {
 				return r.sendResponse(rawReq, nil, err)
 			}
@@ -388,7 +388,7 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 					defer f.Unlock()
 					n, err = f.Read(readBytes)
 					readRes = &ReadResponse{
-						Length: uint32(n),
+						Length: n,
 						Bytes:  readBytes,
 					}
 				}
@@ -416,7 +416,7 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 					defer f.Unlock()
 					n, err = f.Write(req.Bytes)
 					writeRes = &WriteResponse{
-						Length: uint32(n),
+						Length: n,
 					}
 				}
 			}()
@@ -440,7 +440,7 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 					var pos int64
 					f.Lock()
 					defer f.Unlock()
-					pos, err = f.Seek(req.Offset, int(req.Whence))
+					pos, err = f.Seek(req.Offset, req.Whence)
 					seekRes = &SeekResponse{
 						Position: pos,
 					}

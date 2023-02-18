@@ -35,7 +35,7 @@ func (f *RemoteFile) sendRequest(op FileSystemOperation, data interface{}, respo
 func (r *RemoteFS) OpenFile(path string, flags int, perm fs.FileMode) (*RemoteFile, error) {
 	openReq := OpenRequest{
 		Path:  path,
-		Flags: uint32(flags),
+		Flags: flags,
 		Perm:  perm,
 	}
 	req, err := createNewRequest(OpenOp, &openReq)
@@ -76,7 +76,7 @@ func (f *RemoteFile) Close() error {
 func (f *RemoteFile) Read(b []byte) (int, error) {
 	readReq := ReadRequest{
 		FD:     f.FD,
-		Length: uint32(len(b)),
+		Length: len(b),
 	}
 	log.Debugf("Making read request of length: %v", len(b))
 	res, err := f.sendRequest(ReadOp, &readReq, b)
@@ -87,7 +87,7 @@ func (f *RemoteFile) Read(b []byte) (int, error) {
 		return 0, res.Error
 	}
 	readRes := res.Data.(*ReadResponse)
-	return int(readRes.Length), nil
+	return readRes.Length, nil
 }
 
 func (f *RemoteFile) Write(b []byte) (int, error) {
@@ -103,14 +103,14 @@ func (f *RemoteFile) Write(b []byte) (int, error) {
 		return 0, res.Error
 	}
 	writeRes := res.Data.(*WriteResponse)
-	return int(writeRes.Length), nil
+	return writeRes.Length, nil
 }
 
 func (f *RemoteFile) Seek(offset int64, whence int) (int64, error) {
 	seekReq := SeekRequest{
 		FD:     f.FD,
 		Offset: offset,
-		Whence: uint32(whence),
+		Whence: whence,
 	}
 
 	res, err := f.sendRequest(SeekOp, &seekReq)
