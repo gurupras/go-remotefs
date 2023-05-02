@@ -3,11 +3,12 @@ module github.com/gurupras/remotefs
 go 1.19
 
 require (
+	github.com/gurupras/go-fragmentedbuf v0.2.1
 	github.com/pion/datachannel v1.5.2
 	github.com/pion/webrtc/v3 v3.1.49
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/afero v1.9.3
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 )
 

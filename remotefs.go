@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/gurupras/go-fragmentedbuf"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 	"github.com/vmihailenco/msgpack/v5"
@@ -47,7 +48,7 @@ type Message struct {
 type PartialMessage struct {
 	id       IDType
 	op       OpType
-	data     *FragmentedBytesBuffer
+	data     *fragmentedbuf.FragmentedBytesBuffer
 	totalLen int
 }
 
@@ -220,7 +221,7 @@ func (r *RemoteFS) decodeFragment(b []byte) error {
 		p := &PartialMessage{
 			id:       frag.ID,
 			op:       frag.OpType,
-			data:     newFragmentedBytesBuffer(),
+			data:     fragmentedbuf.New(),
 			totalLen: 0,
 		}
 		r.partialMessages[frag.ID] = p
