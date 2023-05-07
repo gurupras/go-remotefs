@@ -188,6 +188,6 @@ func (s *remoteFSWithP2P) SetupTest() {
 }
 
 func TestRemoteFSWithP2P(t *testing.T) {
-	log.SetLevel(log.DebugLevel)
+	// log.SetLevel(log.DebugLevel)
 	suite.Run(t, new(remoteFSWithP2P))
 }
