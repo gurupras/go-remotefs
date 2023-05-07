@@ -15,6 +15,7 @@ type FileSystemOperation = uint8
 const (
 	_ FileSystemOperation = iota
 	OpenOp
+	NameOp
 	ReadOp
 	ReadAtOp
 	WriteOp
@@ -33,6 +34,8 @@ func FileSystemOperationToString(op FileSystemOperation) string {
 	switch op {
 	case OpenOp:
 		return "open"
+	case NameOp:
+		return "name"
 	case ReadOp:
 		return "read"
 	case ReadAtOp:
@@ -114,6 +117,14 @@ type FileOperation struct {
 
 type OpenResponse struct {
 	FD IDType `json:"fd" msgpack:"fd"`
+}
+
+type NameRequest struct {
+	FD IDType `json:"fd" msgpack:"fd"`
+}
+
+type NameResponse struct {
+	Name string `json:"name" msgpack:"name"`
 }
 
 type ReadRequest struct {

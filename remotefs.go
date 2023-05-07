@@ -369,6 +369,31 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 			}()
 			return r.sendResponse(rawReq, nil, err)
 		}
+	case NameOp:
+		{
+			var req NameRequest
+			err := msgpack.Unmarshal(rawReq.Data, &req)
+			if err != nil {
+				return err
+			}
+			var name string
+			func() {
+				r.mutex.Lock()
+				defer r.mutex.Unlock()
+				if f, ok := r.fdMap[req.FD]; !ok {
+					err = fmt.Errorf("bad fd")
+					return
+				} else {
+					f.Lock()
+					defer f.Unlock()
+					name = f.Name()
+				}
+			}()
+			nameRes := &NameResponse{
+				Name: name,
+			}
+			return r.sendResponse(rawReq, nameRes, err)
+		}
 	case ReadOp:
 		{
 			var req ReadRequest
@@ -616,6 +641,10 @@ func (r *RemoteFS) handleIncomingResponse(rawRes *Response) error {
 		}
 	case CloseOp:
 		{
+		}
+	case NameOp:
+		{
+			res = &NameResponse{}
 		}
 	case ReadOp:
 		{

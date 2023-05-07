@@ -99,6 +99,24 @@ func (f *RemoteFile) Close() error {
 	return nil
 }
 
+func (f *RemoteFile) Name() string {
+	nameReq := NameRequest{
+		FD: f.FD,
+	}
+	log.Debugf("Making name request")
+	res, err := f.sendRequest(NameOp, &nameReq)
+	if err != nil {
+		log.Errorf("Encountered error when sending request for name: %v", err)
+		return ""
+	}
+	if res.Error != nil {
+		log.Errorf("Encountered error when asking for name: %v", err)
+		return ""
+	}
+	nameRes := res.Data.(*NameResponse)
+	return nameRes.Name
+}
+
 func (f *RemoteFile) Read(b []byte) (int, error) {
 	readReq := ReadRequest{
 		FD:     f.FD,

@@ -157,6 +157,30 @@ func (s *remoteFSWithNetworkSuite) TestClose() {
 	require.Nil(got)
 }
 
+func (s *remoteFSWithNetworkSuite) TestName() {
+	require := require.New(s.T())
+	path := filepath.Join(s.workdir, "file")
+
+	f, err := s.fs.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	require.Nil(err)
+	f.Close()
+
+	fd := "0"
+
+	s.server.fdMap[fd] = &File{
+		FileInterface: f,
+		Mutex:         sync.Mutex{},
+	}
+
+	rf := &RemoteFile{
+		fs: s.client,
+		FD: fd,
+	}
+
+	name := rf.Name()
+	require.Equal(f.Name(), name)
+}
+
 func (s *remoteFSWithNetworkSuite) TestRename() {
 	require := require.New(s.T())
 	oldPath := filepath.Join(s.workdir, "old")
