@@ -450,6 +450,16 @@ func (r *RemoteFS) handleIncomingRequest(rawReq *Request) error {
 			}()
 			return r.sendResponse(rawReq, seekRes, err)
 		}
+	case RenameOp:
+		{
+			var req RenameRequest
+			err := msgpack.Unmarshal(rawReq.Data, &req)
+			if err != nil {
+				return err
+			}
+			err = r.fs.Rename(req.Old, req.New)
+			return r.sendResponse(rawReq, nil, err)
+		}
 	case MkdirOp:
 		{
 			var req MkdirRequest
@@ -654,6 +664,26 @@ func (r *RemoteFS) handleIncomingResponse(rawRes *Response) error {
 	c <- parsedResponse
 	close(c)
 	delete(r.responseMap, rawRes.ID)
+	return nil
+}
+
+func (r *RemoteFS) Rename(oldPath string, newPath string) error {
+	renameReq := &RenameRequest{
+		Old: oldPath,
+		New: newPath,
+	}
+	req, err := createNewRequest(RenameOp, renameReq)
+	if err != nil {
+		return err
+	}
+
+	res, err := r.SendRequest(req)
+	if err != nil {
+		return err
+	}
+	if res.Error != nil {
+		return res.Error
+	}
 	return nil
 }
 

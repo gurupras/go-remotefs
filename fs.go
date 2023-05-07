@@ -20,6 +20,7 @@ const (
 	WriteOp
 	SeekOp
 	CloseOp
+	RenameOp
 	MkdirOp
 	RmdirOp
 	ReadDirOp
@@ -42,6 +43,8 @@ func FileSystemOperationToString(op FileSystemOperation) string {
 		return "seek"
 	case CloseOp:
 		return "close"
+	case RenameOp:
+		return "rename"
 	case MkdirOp:
 		return "mkdir"
 	case RmdirOp:
@@ -150,6 +153,11 @@ type SeekRequest struct {
 
 type SeekResponse struct {
 	Position int64 `json:"pos" msgpack:"pos"`
+}
+
+type RenameRequest struct {
+	Old string `json:"old" msgpack:"old"`
+	New string `json:"new" msgpack:"new"`
 }
 
 type MkdirRequest struct {

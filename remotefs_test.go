@@ -157,6 +157,23 @@ func (s *remoteFSWithNetworkSuite) TestClose() {
 	require.Nil(got)
 }
 
+func (s *remoteFSWithNetworkSuite) TestRename() {
+	require := require.New(s.T())
+	oldPath := filepath.Join(s.workdir, "old")
+	newPath := filepath.Join(s.workdir, "new")
+	f, err := s.fs.OpenFile(oldPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	require.Nil(err)
+	f.Close()
+
+	err = s.client.Rename(oldPath, newPath)
+	require.Nil(err)
+
+	f, err = s.fs.Open(newPath)
+	require.Nil(err)
+	_, err = f.Stat()
+	require.Nil(err)
+}
+
 func (s *remoteFSWithNetworkSuite) TestMkdir() {
 	require := require.New(s.T())
 	fpath := filepath.Join(s.workdir, "mkdir")
