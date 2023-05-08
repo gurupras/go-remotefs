@@ -169,7 +169,7 @@ func (r *RemoteFS) decodeMessage(b []byte) error {
 		{
 			var req Request
 			msgpack.Unmarshal(msg.Data, &req)
-			log.Debugf("[%v]: Recevied request. type=%v", r.Name, FileSystemOperationToString(req.Type))
+			log.Debugf("[%v]: Received request. type=%v rawSize=%v", r.Name, FileSystemOperationToString(req.Type), len(msg.Data))
 			err := r.handleIncomingRequest(&req)
 			if err != nil {
 				log.Errorf("[%v]: Failed to handle incoming request: %v", r.Name, err)
@@ -180,7 +180,7 @@ func (r *RemoteFS) decodeMessage(b []byte) error {
 		{
 			var res Response
 			msgpack.Unmarshal(msg.Data, &res)
-			log.Debugf("[%v]: Recevied response. type=%v", r.Name, FileSystemOperationToString(res.Type))
+			log.Debugf("[%v]: Received response. type=%v rawSize=%v", r.Name, FileSystemOperationToString(res.Type), len(msg.Data))
 			err := r.handleIncomingResponse(&res)
 			if err != nil {
 				log.Errorf("[%v]: Failed to handle incoming response: %v", r.Name, err)
