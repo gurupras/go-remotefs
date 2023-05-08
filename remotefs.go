@@ -112,7 +112,7 @@ func (r *RemoteFS) SendResponse(res *Response) error {
 	if err != nil {
 		return err
 	}
-	log.Debugf("[%v]: Sent response type=%v", r.Name, FileSystemOperationToString(res.Type))
+	log.Debugf("[%v]: Sent response id=%v type=%v", r.Name, res.ID, FileSystemOperationToString(res.Type))
 	return nil
 }
 
@@ -169,7 +169,7 @@ func (r *RemoteFS) decodeMessage(b []byte) error {
 		{
 			var req Request
 			msgpack.Unmarshal(msg.Data, &req)
-			log.Debugf("[%v]: Received request. type=%v rawSize=%v", r.Name, FileSystemOperationToString(req.Type), len(msg.Data))
+			log.Debugf("[%v]: Received request. id=%v type=%v rawSize=%v", r.Name, req.ID, FileSystemOperationToString(req.Type), len(msg.Data))
 			err := r.handleIncomingRequest(&req)
 			if err != nil {
 				log.Errorf("[%v]: Failed to handle incoming request: %v", r.Name, err)
@@ -180,7 +180,7 @@ func (r *RemoteFS) decodeMessage(b []byte) error {
 		{
 			var res Response
 			msgpack.Unmarshal(msg.Data, &res)
-			log.Debugf("[%v]: Received response. type=%v rawSize=%v", r.Name, FileSystemOperationToString(res.Type), len(msg.Data))
+			log.Debugf("[%v]: Received response. id=%v type=%v rawSize=%v", r.Name, res.ID, FileSystemOperationToString(res.Type), len(msg.Data))
 			err := r.handleIncomingResponse(&res)
 			if err != nil {
 				log.Errorf("[%v]: Failed to handle incoming response: %v", r.Name, err)
@@ -207,7 +207,7 @@ func (r *RemoteFS) encodeMessage(id IDType, op OpType, data interface{}) error {
 		return err
 	}
 	r.sendChan <- msgBytes
-	log.Debugf("[%v]: Encoded message size=%v type=%v", r.Name, len(msgBytes), op)
+	log.Debugf("[%v]: Encoded message id=%v size=%v type=%v", r.Name, id, len(msgBytes), op)
 	return nil
 }
 
