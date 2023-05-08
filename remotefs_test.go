@@ -62,9 +62,6 @@ func createSendChan(t *testing.T, writer io.Writer, name string) chan<- []byte {
 	go func() {
 		for b := range ch {
 			pkt := &packetWrapper{b}
-			if len(b) > 65535 {
-				log.Warnf("[%v]: Attemping to send large packet", name)
-			}
 			err := encoder.Encode(pkt)
 			require.Nil(err)
 		}

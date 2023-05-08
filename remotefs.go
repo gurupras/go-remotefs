@@ -7,7 +7,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gurupras/go-fragmentedbuf"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 	"github.com/vmihailenco/msgpack/v5"
@@ -41,59 +40,38 @@ type File struct {
 }
 
 type Message struct {
+	ID IDType
 	OpType
-	data interface{}
-}
-
-type PartialMessage struct {
-	id       IDType
-	op       OpType
-	data     *fragmentedbuf.FragmentedBytesBuffer
-	totalLen int
+	Data []byte
 }
 
 type RemoteFS struct {
 	Name              string
 	fs                afero.Fs
-	maxPacketSize     int
 	mutex             sync.Mutex
 	fdMap             map[IDType]*File
 	responseMap       map[IDType]chan *ParsedResponse
 	responseBufferMap map[IDType][]byte
-	partialMessages   map[IDType]*PartialMessage
 	incomingMessages  chan *Message
 	stopped           bool
 	sendChan          chan<- []byte
 	receiveChan       <-chan []byte
 }
 
-func New(name string, fs afero.Fs, sendChan chan<- []byte, receiveChan <-chan []byte, maxPacketSize int) (*RemoteFS, error) {
-	if maxPacketSize != 0 && maxPacketSize < HeaderSize {
-		return nil, fmt.Errorf("maxPacketSize (%v) must be %v", maxPacketSize, HeaderSize)
-	}
-
+func New(name string, fs afero.Fs, sendChan chan<- []byte, receiveChan <-chan []byte) (*RemoteFS, error) {
 	responseMap := make(map[IDType]chan *ParsedResponse)
 
 	ret := &RemoteFS{
 		Name:              name,
 		fs:                fs,
 		mutex:             sync.Mutex{},
-		maxPacketSize:     maxPacketSize,
 		fdMap:             make(map[IDType]*File),
 		responseBufferMap: make(map[IDType][]byte),
 		responseMap:       responseMap,
-		partialMessages:   make(map[IDType]*PartialMessage),
 		incomingMessages:  make(chan *Message),
 		sendChan:          sendChan,
 		receiveChan:       receiveChan,
 	}
-	go func() {
-		err := ret.handleIncomingFragments()
-		if err != nil {
-			log.Errorf("[%v]: Error when handling incoming fragment: %v", ret.Name, err)
-		}
-	}()
-
 	go func() {
 		err := ret.handleIncomingMessages()
 		if err != nil {
@@ -120,7 +98,7 @@ func (r *RemoteFS) SendRequest(req *Request, buf ...[]byte) (*ParsedResponse, er
 	}
 	r.mutex.Unlock()
 
-	err := r.encodeFragment(req.ID, RequestOp, req)
+	err := r.encodeMessage(req.ID, RequestOp, req)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +108,7 @@ func (r *RemoteFS) SendRequest(req *Request, buf ...[]byte) (*ParsedResponse, er
 }
 
 func (r *RemoteFS) SendResponse(res *Response) error {
-	err := r.encodeFragment(res.ID, ResponseOp, res)
+	err := r.encodeMessage(res.ID, ResponseOp, res)
 	if err != nil {
 		return err
 	}
@@ -157,34 +135,6 @@ func (r *RemoteFS) sendResponse(req *Request, data interface{}, err error) error
 }
 
 func (r *RemoteFS) handleIncomingMessages() error {
-	for msg := range r.incomingMessages {
-		switch msg.OpType {
-		case RequestOp:
-			{
-				req := msg.data.(*Request)
-				log.Debugf("[%v]: Recevied request. type=%v", r.Name, FileSystemOperationToString(req.Type))
-				err := r.handleIncomingRequest(req)
-				if err != nil {
-					log.Errorf("[%v]: Failed to handle incoming request: %v", r.Name, err)
-					return err
-				}
-			}
-		case ResponseOp:
-			{
-				res := msg.data.(*Response)
-				log.Debugf("[%v]: Recevied response. type=%v", r.Name, FileSystemOperationToString(res.Type))
-				err := r.handleIncomingResponse(res)
-				if err != nil {
-					log.Errorf("[%v]: Failed to handle incoming response: %v", r.Name, err)
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (r *RemoteFS) handleIncomingFragments() error {
 	isStopped := func() bool {
 		r.mutex.Lock()
 		defer r.mutex.Unlock()
@@ -194,7 +144,7 @@ func (r *RemoteFS) handleIncomingFragments() error {
 		if isStopped() {
 			break
 		}
-		err := r.decodeFragment(b)
+		err := r.decodeMessage(b)
 		if err != nil {
 			stopped := isStopped()
 			log.Debugf("[%v]: Encountered error and stopped=%v", r.Name, stopped)
@@ -207,114 +157,57 @@ func (r *RemoteFS) handleIncomingFragments() error {
 	return nil
 }
 
-func (r *RemoteFS) decodeFragment(b []byte) error {
-	var frag Fragment
-	err := msgpack.Unmarshal(b, &frag)
+func (r *RemoteFS) decodeMessage(b []byte) error {
+	var msg Message
+	err := msgpack.Unmarshal(b, &msg)
 	if err != nil {
 		return err
 	}
-	log.Debugf("[%v]: Decoded fragment id=%v size=%v end=%v type=%v", r.Name, frag.ID, len(frag.Data), frag.End, frag.OpType)
 
-	partial, ok := r.partialMessages[frag.ID]
-	if !ok {
-		r.mutex.Lock()
-		p := &PartialMessage{
-			id:       frag.ID,
-			op:       frag.OpType,
-			data:     fragmentedbuf.New(),
-			totalLen: 0,
-		}
-		r.partialMessages[frag.ID] = p
-		r.mutex.Unlock()
-		partial = p
-	}
-	partial.data.Write(frag.Data)
-
-	var data interface{}
-
-	if frag.End {
-		switch frag.OpType {
-		case RequestOp:
-			{
-				var req Request
-				data = &req
-			}
-		case ResponseOp:
-			{
-				var res Response
-				data = &res
+	switch msg.OpType {
+	case RequestOp:
+		{
+			var req Request
+			msgpack.Unmarshal(msg.Data, &req)
+			log.Debugf("[%v]: Recevied request. type=%v", r.Name, FileSystemOperationToString(req.Type))
+			err := r.handleIncomingRequest(&req)
+			if err != nil {
+				log.Errorf("[%v]: Failed to handle incoming request: %v", r.Name, err)
+				return err
 			}
 		}
-		decoder := msgpack.NewDecoder(partial.data)
-		func() {
-			r.mutex.Lock()
-			defer r.mutex.Unlock()
-			delete(r.partialMessages, frag.ID)
-		}()
-		err := decoder.Decode(data)
-		if err != nil {
-			return err
+	case ResponseOp:
+		{
+			var res Response
+			msgpack.Unmarshal(msg.Data, &res)
+			log.Debugf("[%v]: Recevied response. type=%v", r.Name, FileSystemOperationToString(res.Type))
+			err := r.handleIncomingResponse(&res)
+			if err != nil {
+				log.Errorf("[%v]: Failed to handle incoming response: %v", r.Name, err)
+				return err
+			}
 		}
-		msg := &Message{
-			OpType: frag.OpType,
-			data:   data,
-		}
-		r.incomingMessages <- msg
 	}
 	return nil
 }
 
-func (r *RemoteFS) encodeFragment(id IDType, op OpType, data interface{}) error {
-	dataBytes, err := msgpack.Marshal(data)
+func (r *RemoteFS) encodeMessage(id IDType, op OpType, data interface{}) error {
+	b, err := msgpack.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	maxDataSize := r.maxPacketSize - HeaderSize
-
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if r.maxPacketSize == 0 || len(dataBytes) < maxDataSize-64 { // FIXME: We need to account for fragment size
-		frag := Fragment{
-			ID:     id,
-			OpType: op,
-			Data:   dataBytes,
-			End:    true,
-		}
-		fragBytes, err := msgpack.Marshal(frag)
-		if err != nil {
-			return err
-		}
-		r.sendChan <- fragBytes
-		log.Debugf("[%v]: Encoded fragment id=%v size=%v end=%v type=%v", r.Name, frag.ID, len(frag.Data), frag.End, frag.OpType)
-	} else {
-		sent := 0
-		for {
-			var frag Fragment
-			frag.ID = id
-
-			remaining := len(dataBytes) - sent
-			chunkSize := maxDataSize - 64
-			if remaining < chunkSize {
-				chunkSize = remaining
-				frag.OpType = op
-				frag.End = true
-			} else {
-				frag.End = false
-			}
-			frag.Data = dataBytes[sent : sent+chunkSize]
-			fragBytes, err := msgpack.Marshal(frag)
-			if err != nil {
-				return err
-			}
-			r.sendChan <- fragBytes
-			log.Debugf("[%v]: Encoded fragment id=%v size=%v end=%v type=%v", r.Name, frag.ID, len(frag.Data), frag.End, frag.OpType)
-			sent += chunkSize
-			if sent == len(dataBytes) {
-				break
-			}
-		}
+	msg := &Message{
+		ID:     id,
+		OpType: op,
+		Data:   b,
 	}
+	msgBytes, err := msgpack.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	r.sendChan <- msgBytes
+	log.Debugf("[%v]: Encoded message size=%v type=%v", r.Name, len(msgBytes), op)
 	return nil
 }
 

@@ -76,13 +76,6 @@ const (
 
 type IDType = string
 
-type Fragment struct {
-	ID IDType
-	OpType
-	End  bool
-	Data []byte
-}
-
 type Response struct {
 	ID    IDType              `json:"id" msgpack:"id"`
 	Type  FileSystemOperation `json:"type" msgpack:"type"`
