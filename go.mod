@@ -1,4 +1,4 @@
-module github.com/gurupras/remotefs
+module github.com/gurupras/remotefs/v2
 
 go 1.19
 
