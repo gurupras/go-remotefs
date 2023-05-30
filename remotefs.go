@@ -40,9 +40,9 @@ type File struct {
 }
 
 type Message struct {
-	ID IDType
-	OpType
-	Data []byte
+	ID     IDType `json:"id" msgpack:"id"`
+	OpType `json:"opType" msgpack:"opType"`
+	Data   []byte `json:"data" msgpack:"data"`
 }
 
 type RemoteFS struct {

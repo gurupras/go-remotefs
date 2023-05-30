@@ -81,21 +81,21 @@ type Response struct {
 	Type  FileSystemOperation `json:"type" msgpack:"type"`
 	OK    bool                `json:"ok" msgpack:"ok"`
 	Error string              `json:"error" msgpack:"error"`
-	Data  []byte
+	Data  []byte              `json:"data" msgpack:"data"`
 }
 
 type ParsedResponse struct {
-	ID    IDType
-	Type  FileSystemOperation
-	OK    bool
-	Error error
-	Data  interface{}
+	ID    IDType              `json:"id" msgpack:"id"`
+	Type  FileSystemOperation `json:"type" msgpack:"type"`
+	OK    bool                `json:"ok" msgpack:"ok"`
+	Error error               `json:"error" msgpack:"error"`
+	Data  interface{}         `json:"data" msgpack:"data"`
 }
 
 type Request struct {
 	ID   IDType              `json:"id" msgpack:"id"`
 	Type FileSystemOperation `json:"type" msgpack:"type"`
-	Data []byte
+	Data []byte              `json:"data" msgpack:"data"`
 }
 
 type OpenRequest struct {
@@ -181,31 +181,31 @@ type ReadDirRequest struct {
 }
 
 type ReadDirResponse struct {
-	Children []*FileInfo
+	Children []*FileInfo `json:"children" msgpack:"children"`
 }
 
 type ChmodRequest struct {
-	FD   IDType
-	Mode os.FileMode
+	FD   IDType      `json:"fd" msgpack:"fd"`
+	Mode os.FileMode `json:"mode" msgpack:"mode"`
 }
 
 type ChownRequest struct {
-	FD  IDType
-	UID int
-	GID int
+	FD  IDType `json:"fd" msgpack:"fd"`
+	UID int    `json:"uid" msgpack:"uid"`
+	GID int    `json:"gid" msgpack:"gid"`
 }
 
 type StatRequest struct {
-	FD IDType
+	FD IDType `json:"fd" msgpack:"fd"`
 }
 
 type FileInfo struct {
-	FName    string
-	FSize    int64
-	FMode    os.FileMode
-	FModTime time.Time
-	FIsDir   bool
-	FSys     any
+	FName    string      `json:"name" msgpack:"name"`
+	FSize    int64       `json:"size" msgpack:"size"`
+	FMode    os.FileMode `json:"mode" msgpack:"mode"`
+	FModTime time.Time   `json:"modTime" msgpack:"modTime"`
+	FIsDir   bool        `json:"isDir" msgpack:"isDir"`
+	FSys     any         `json:"sys" msgpack:"sys"`
 }
 
 func (f *FileInfo) Name() string {
